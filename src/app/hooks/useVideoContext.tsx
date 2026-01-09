@@ -102,7 +102,20 @@ export const VideoProvider = ({ children }: { children: ReactNode }) => {
 
             dispatch({ type: 'SET_STREAM', payload: stream });
 
-            const mediaRecorder = new MediaRecorder(stream);
+            // Determine the best supported format for this browser
+            // iOS Safari needs MP4, others can use WebM
+            let mimeType = 'video/webm';
+            if (MediaRecorder.isTypeSupported('video/mp4')) {
+                mimeType = 'video/mp4';
+            } else if (MediaRecorder.isTypeSupported('video/webm;codecs=h264')) {
+                mimeType = 'video/webm;codecs=h264';
+            } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
+                mimeType = 'video/webm;codecs=vp9';
+            } else if (MediaRecorder.isTypeSupported('video/webm')) {
+                mimeType = 'video/webm';
+            }
+
+            const mediaRecorder = new MediaRecorder(stream, { mimeType });
             mediaRecorderRef.current = mediaRecorder;
             chunksRef.current = [];
 
@@ -113,7 +126,7 @@ export const VideoProvider = ({ children }: { children: ReactNode }) => {
             };
 
             mediaRecorder.onstop = async () => {
-                const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+                const blob = new Blob(chunksRef.current, { type: mimeType });
                 try {
                     if (state.video) {
                         await deleteVideo(state.video.id);

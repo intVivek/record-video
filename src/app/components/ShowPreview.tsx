@@ -25,6 +25,7 @@ export default function StreamPreview() {
                 src={videoURL || undefined}
                 controls
                 playsInline
+                preload="metadata"
                 className={twMerge("w-[0px] h-[0px] max-w-[400px] max-h-[400px] object-cover transition-all opacity-0", videoURL && "w-full h-full opacity-100")}
             />
         </div>
