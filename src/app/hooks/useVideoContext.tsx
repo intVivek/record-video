@@ -93,12 +93,34 @@ export const VideoProvider = ({ children }: { children: ReactNode }) => {
                 throw new Error('getUserMedia is not supported in this browser');
             }
 
-            // Request camera and microphone access - this will trigger browser permission prompt
-            // Using simpler constraints for better iOS Chrome compatibility
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: true,
-                audio: true
-            });
+            let stream: MediaStream;
+            let hasAudio = false;
+
+            // Try to get video + audio first
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: true
+                });
+                hasAudio = stream.getAudioTracks().length > 0;
+            } catch (err: any) {
+                console.log("Failed to get audio, trying video-only:", err);
+
+                // If audio fails, try video-only
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: true,
+                        audio: false
+                    });
+                    hasAudio = false;
+
+                    // Show a warning that we're recording without audio
+                    console.info("Recording without audio");
+                } catch (videoErr: any) {
+                    // If video also fails, throw the error
+                    throw videoErr;
+                }
+            }
 
             dispatch({ type: 'SET_STREAM', payload: stream });
 
@@ -195,12 +217,28 @@ export const VideoProvider = ({ children }: { children: ReactNode }) => {
                 throw new Error('getUserMedia is not supported in this browser');
             }
 
-            // Request camera and microphone access - this will trigger browser permission prompt
-            // Using simpler constraints for better iOS Chrome compatibility
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: true,
-                audio: true
-            });
+            let stream: MediaStream;
+
+            // Try to get video + audio first
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: true
+                });
+            } catch (err: any) {
+                console.log("Failed to get audio permission, trying video-only:", err);
+
+                // If audio fails, try video-only
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: true,
+                        audio: false
+                    });
+                } catch (videoErr: any) {
+                    // If video also fails, throw the error
+                    throw videoErr;
+                }
+            }
 
             // Permission granted! Mark it and stop the stream (we don't need it yet)
             dispatch({ type: 'SET_PERMISSION', payload: true });
