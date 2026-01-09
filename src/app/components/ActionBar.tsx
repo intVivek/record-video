@@ -1,6 +1,6 @@
 import Button from "./UI/Button";
 import { useVideoContext } from "../hooks/useVideoContext";
-import { FaStop, FaRedo, FaUpload, FaPlay, FaTrash } from "react-icons/fa";
+import { FaStop, FaUpload, FaPlay, FaTrash } from "react-icons/fa";
 import { useSimulateUpload } from "../hooks/useSimulateUpload";
 import { twMerge } from "tailwind-merge";
 

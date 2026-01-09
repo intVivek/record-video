@@ -7,6 +7,7 @@ interface VideoState {
     stream: MediaStream | null;
     error: string | null;
     loading: boolean;
+    permissionGranted: boolean;
 }
 
 type VideoAction =
@@ -14,12 +15,14 @@ type VideoAction =
     | { type: 'SET_RECORDING'; payload: boolean }
     | { type: 'SET_STREAM'; payload: MediaStream | null }
     | { type: 'SET_ERROR'; payload: string | null }
-    | { type: 'SET_LOADING'; payload: boolean };
+    | { type: 'SET_LOADING'; payload: boolean }
+    | { type: 'SET_PERMISSION'; payload: boolean };
 
 interface VideoContextType extends VideoState {
     startRecording: () => void;
     stopRecording: () => void;
     deleteVideoRecord: () => void;
+    requestPermission: () => void;
     videoRef: React.RefObject<HTMLVideoElement | null>;
     isVideoAvailable: boolean;
 }
@@ -30,6 +33,7 @@ const initialState: VideoState = {
     stream: null,
     error: null,
     loading: true,
+    permissionGranted: false,
 };
 
 const videoReducer = (state: VideoState, action: VideoAction): VideoState => {
@@ -39,6 +43,7 @@ const videoReducer = (state: VideoState, action: VideoAction): VideoState => {
         case 'SET_STREAM': return { ...state, stream: action.payload };
         case 'SET_ERROR': return { ...state, error: action.payload };
         case 'SET_LOADING': return { ...state, loading: action.payload };
+        case 'SET_PERMISSION': return { ...state, permissionGranted: action.payload };
         default: return state;
     }
 };
@@ -80,7 +85,21 @@ export const VideoProvider = ({ children }: { children: ReactNode }) => {
 
     const startRecording = async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            // Clear any previous errors
+            dispatch({ type: 'SET_ERROR', payload: null });
+
+            // Check if getUserMedia is supported
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('getUserMedia is not supported in this browser');
+            }
+
+            // Request camera and microphone access - this will trigger browser permission prompt
+            // Using simpler constraints for better iOS Chrome compatibility
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: true
+            });
+
             dispatch({ type: 'SET_STREAM', payload: stream });
 
             const mediaRecorder = new MediaRecorder(stream);
@@ -112,10 +131,27 @@ export const VideoProvider = ({ children }: { children: ReactNode }) => {
 
             mediaRecorder.start();
             dispatch({ type: 'SET_RECORDING', payload: true });
-            dispatch({ type: 'SET_ERROR', payload: null });
-        } catch (err) {
+        } catch (err: any) {
             console.error("Error starting recording:", err);
-            dispatch({ type: 'SET_ERROR', payload: "Could not access camera/microphone." });
+
+            // Provide more specific error messages with actionable guidance
+            let errorMessage = "Could not access camera/microphone.";
+
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                errorMessage = "Please allow camera and microphone access when your browser asks. Click 'Allow' in the permission popup, or check your browser's address bar for a camera/microphone icon to grant permissions.";
+            } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                errorMessage = "No camera or microphone found on your device.";
+            } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                errorMessage = "Camera/microphone is already in use by another application. Please close other apps using your camera/microphone and try again.";
+            } else if (err.name === 'OverconstrainedError') {
+                errorMessage = "Camera/microphone constraints could not be satisfied.";
+            } else if (err.name === 'NotSupportedError') {
+                errorMessage = "Your browser does not support video recording. Please use Chrome, Safari, Firefox, or Edge.";
+            } else if (err.name === 'SecurityError') {
+                errorMessage = "Camera/microphone access blocked. Make sure you're accessing this site via HTTPS and try again.";
+            }
+
+            dispatch({ type: 'SET_ERROR', payload: errorMessage });
         }
     };
 
@@ -136,9 +172,57 @@ export const VideoProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+    const requestPermission = async () => {
+        try {
+            // Clear any previous errors
+            dispatch({ type: 'SET_ERROR', payload: null });
+
+            // Check if getUserMedia is supported
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('getUserMedia is not supported in this browser');
+            }
+
+            // Request camera and microphone access - this will trigger browser permission prompt
+            // Using simpler constraints for better iOS Chrome compatibility
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: true
+            });
+
+            // Permission granted! Mark it and stop the stream (we don't need it yet)
+            dispatch({ type: 'SET_PERMISSION', payload: true });
+
+            // Stop all tracks immediately - we just wanted to check permission
+            stream.getTracks().forEach(track => track.stop());
+
+        } catch (err: any) {
+            console.error("Error requesting permission:", err);
+
+            // Provide more specific error messages with actionable guidance
+            let errorMessage = "Could not access camera/microphone.";
+
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                errorMessage = "Please allow camera and microphone access when your browser asks. Click 'Allow' in the permission popup, or check your browser's address bar for a camera/microphone icon to grant permissions.";
+            } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                errorMessage = "No camera or microphone found on your device.";
+            } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                errorMessage = "Camera/microphone is already in use by another application. Please close other apps using your camera/microphone and try again.";
+            } else if (err.name === 'OverconstrainedError') {
+                errorMessage = "Camera/microphone constraints could not be satisfied.";
+            } else if (err.name === 'NotSupportedError') {
+                errorMessage = "Your browser does not support video recording. Please use Chrome, Safari, Firefox, or Edge.";
+            } else if (err.name === 'SecurityError') {
+                errorMessage = "Camera/microphone access blocked. Make sure you're accessing this site via HTTPS and try again.";
+            }
+
+            dispatch({ type: 'SET_ERROR', payload: errorMessage });
+            dispatch({ type: 'SET_PERMISSION', payload: false });
+        }
+    };
+
     return (
         <VideoContext.Provider
-            value={{ ...state, startRecording, stopRecording, deleteVideoRecord, videoRef, isVideoAvailable }}
+            value={{ ...state, startRecording, stopRecording, deleteVideoRecord, requestPermission, videoRef, isVideoAvailable }}
         >
             {children}
         </VideoContext.Provider>
